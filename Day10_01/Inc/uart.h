@@ -20,9 +20,6 @@
 #define BAUD_BRR_115200	0x8B
 
 void UartInit(uint32_t baud);
-void UartPutch(uint8_t ch);
-uint8_t UartGetch(void);
 void UartPuts(char str[]);
-void UartGets(char str[]);
 
 #endif /* UART_H_ */

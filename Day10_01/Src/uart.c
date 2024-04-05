@@ -1,10 +1,11 @@
 /*
  * uart.c
  *
- *  Created on: Apr 1, 2024
- *      Author: Nilesh
+ *  Created on: Apr 4, 2024
+ *      Author: admin1
  */
 
+#include <stdio.h>
 #include "uart.h"
 
 #define TX_PIN	2
@@ -45,44 +46,45 @@ void UartInit(uint32_t baud) {
 			USART2->BRR = BAUD_BRR_115200;
 			break;
 	}
+	// enable uart interrupt in nvic
+	NVIC_EnableIRQ(USART2_IRQn);
 	// uart enable (UE=1)
 	USART2->CR1 |= BV(USART_CR1_UE_Pos);
 }
 
-void UartPutch(uint8_t ch) {
-	// wait until TDR is empty (i.e. prev byte transmitted)
-	while((USART2->SR & BV(USART_SR_TXE_Pos)) == 0)
-		;
-	// write new byte in TDR
-	USART2->DR = ch;
-}
-
-uint8_t UartGetch(void) {
-	// wait until RDR is not empty (i.e. new byte received)
-	while((USART2->SR & BV(USART_SR_RXNE_Pos)) == 0)
-		;
-	// read received byte from RDR
-	char ch = USART2->DR;
-	return ch;
-}
-
+char *tx_string;
+int tx_index = 0;
+volatile int tx_complete = 1;
 void UartPuts(char str[]) {
-	int i;
-	for(i=0; str[i]!='\0'; i++)
-		UartPutch(str[i]);
+	// wait for last string completion
+	while(!tx_complete)
+		;
+	tx_complete = 0;
+	tx_string = str;
+	// send first char
+	tx_index = 0;
+	USART2->DR = tx_string[tx_index];
+	tx_index++;
+	// enable uart txeie interrupt
+	USART2->CR1 |= BV(USART_CR1_TXEIE_Pos);
+}
+void USART2_IRQHandler(void) {
+	// check if last char tx
+	if((USART2->SR & BV(USART_SR_TXE_Pos)) != 0) {
+		// send next char if available
+		if(tx_string[tx_index] != '\0') {
+			USART2->DR = tx_string[tx_index];
+			tx_index++;
+		}
+		else {
+			tx_string = NULL;
+			tx_complete = 1;
+			// disable uart txeie interrupt
+			USART2->CR1 &= ~BV(USART_CR1_TXEIE_Pos);
+		}
+	}
 }
 
-void UartGets(char str[]) {
-	int i=0;
-	char ch;
-	do {
-		ch = UartGetch();
-		str[i] = ch;
-		i++;
-	} while(ch != '\r');
-	str[i] = '\n';
-	i++;
-	str[i] = '\0';
-}
+
 
 
